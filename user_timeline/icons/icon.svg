@@ -1,0 +1,34 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- 渐变背景 -->
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#764ba2;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#f093fb;stop-opacity:1" />
+    </linearGradient>
+    <!-- 时间轴线条渐变 -->
+    <linearGradient id="lineGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:0.8" />
+      <stop offset="100%" style="stop-color:#ffffff;stop-opacity:0.4" />
+    </linearGradient>
+  </defs>
+  
+  <!-- 圆角背景 -->
+  <rect width="128" height="128" rx="24" ry="24" fill="url(#bgGradient)"/>
+  
+  <!-- 时间轴竖线 -->
+  <line x1="64" y1="20" x2="64" y2="108" stroke="url(#lineGradient)" stroke-width="3" stroke-linecap="round"/>
+  
+  <!-- 时间轴节点（对话点） -->
+  <circle cx="64" cy="35" r="6" fill="#ffffff" opacity="0.95"/>
+  <circle cx="64" cy="55" r="6" fill="#ffffff" opacity="0.95"/>
+  <circle cx="64" cy="75" r="6" fill="#ffffff" opacity="0.95"/>
+  <circle cx="64" cy="95" r="6" fill="#ffffff" opacity="0.95"/>
+  
+  <!-- 高亮当前节点 -->
+  <circle cx="64" cy="75" r="9" fill="#ffffff" opacity="0.3"/>
+  <circle cx="64" cy="75" r="6" fill="#ffffff" opacity="1"/>
+  
+  <!-- 装饰性光晕 -->
+  <circle cx="64" cy="64" r="50" fill="#ffffff" opacity="0.1"/>
+</svg>
