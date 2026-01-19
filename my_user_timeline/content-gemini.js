@@ -6,6 +6,7 @@ class GeminiTimeline {
     this.previewPopup = null;
     this.platform = 'gemini';
     this.contentHandler = new GeminiContentHandler();
+    this.currentConversationId = null; // track current conversation/session
     this.init();
   }
 
@@ -14,7 +15,72 @@ class GeminiTimeline {
     this.createTimelineContainer();
     this.createPreviewPopup();
     this.initContentHandler();
+    this.setupLocationChangeListener();
     this.setupObserver();
+  }
+
+  // 返回当前会话标识，优先使用页面上可用的会话相关属性，回退到 URL
+  getConversationId() {
+    try {
+      const first = document.querySelector(this.contentHandler?.SEL_USER_BUBBLE || '');
+      if (first) {
+        const conv = first.closest('[data-conversation-id]');
+        if (conv && conv.dataset && conv.dataset.conversationId) return String(conv.dataset.conversationId);
+        if (first.dataset && first.dataset.turnId) return `turn-${first.dataset.turnId}`;
+      }
+    } catch {}
+    return location.pathname + location.search;
+  }
+
+  // 监听 SPA 导航（history API）变化，触发会话切换处理
+  setupLocationChangeListener() {
+    if (!window.__geminiTimelineHistoryHook) {
+      const _push = history.pushState;
+      const _replace = history.replaceState;
+      history.pushState = function () {
+        const res = _push.apply(this, arguments);
+        window.dispatchEvent(new Event('locationchange'));
+        return res;
+      };
+      history.replaceState = function () {
+        const res = _replace.apply(this, arguments);
+        window.dispatchEvent(new Event('locationchange'));
+        return res;
+      };
+      window.addEventListener('popstate', () => window.dispatchEvent(new Event('locationchange')));
+      window.__geminiTimelineHistoryHook = true;
+    }
+
+    window.addEventListener('locationchange', () => {
+      try { this.handleConversationChange(); } catch (e) { console.error(e); }
+    });
+  }
+
+  // 当检测到会话切换时，重置并重新加载数据
+  async handleConversationChange() {
+    const newId = this.getConversationId();
+    if (this.currentConversationId === newId) return;
+    console.log('Gemini Timeline: Conversation changed', { from: this.currentConversationId, to: newId });
+    this.currentConversationId = newId;
+
+    this.timelineData = [];
+    this.renderTimeline();
+
+    try {
+      this.contentHandler.conversationContainer = null;
+      this.contentHandler.scrollContainer = null;
+      const ok = await this.contentHandler.init();
+      if (ok) {
+        if (this.observer) {
+          try { this.observer.disconnect(); } catch {}
+          const target = this.contentHandler.conversationContainer || document.body;
+          this.observer.observe(target, { childList: true, subtree: true, attributes: false, characterData: false });
+        }
+        this.tryParseMessages();
+      }
+    } catch (error) {
+      console.error('Gemini Timeline: Error handling conversation change', error);
+    }
   }
 
   // 初始化平台专用内容处理器

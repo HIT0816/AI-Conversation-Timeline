@@ -6,6 +6,7 @@ class ChatGPTTimeline {
     this.previewPopup = null;
     this.platform = 'chatgpt';
     this.contentHandler = new ChatGPTContentHandler();
+    this.currentConversationId = null; // track current conversation/session
     this.init();
   }
 
@@ -14,7 +15,78 @@ class ChatGPTTimeline {
     this.createTimelineContainer();
     this.createPreviewPopup();
     this.initContentHandler();
+    this.setupLocationChangeListener();
     this.setupObserver();
+  }
+
+  // 返回当前会话标识，优先使用页面上可用的会话相关属性，回退到 URL
+  getConversationId() {
+    try {
+      const firstTurn = document.querySelector('article[data-turn-id]');
+      if (firstTurn) {
+        const conv = firstTurn.closest('[data-conversation-id]');
+        if (conv && conv.dataset && conv.dataset.conversationId) return String(conv.dataset.conversationId);
+        // 尝试使用第一个 message 的 turn id 做区分
+        if (firstTurn.dataset && firstTurn.dataset.turnId) return `turn-${firstTurn.dataset.turnId}`;
+      }
+    } catch {}
+    return location.pathname + location.search;
+  }
+
+  // 监听 SPA 导航（history API）变化，触发会话切换处理
+  setupLocationChangeListener() {
+    // 全局只需要 hook 一次 history 方法
+    if (!window.__geminiTimelineHistoryHook) {
+      const _push = history.pushState;
+      const _replace = history.replaceState;
+      history.pushState = function () {
+        const res = _push.apply(this, arguments);
+        window.dispatchEvent(new Event('locationchange'));
+        return res;
+      };
+      history.replaceState = function () {
+        const res = _replace.apply(this, arguments);
+        window.dispatchEvent(new Event('locationchange'));
+        return res;
+      };
+      window.addEventListener('popstate', () => window.dispatchEvent(new Event('locationchange')));
+      window.__geminiTimelineHistoryHook = true;
+    }
+
+    // 监听 locationchange，比较会话 id
+    window.addEventListener('locationchange', () => {
+      try { this.handleConversationChange(); } catch (e) { console.error(e); }
+    });
+  }
+
+  // 当检测到会话切换时，重置并重新加载数据
+  async handleConversationChange() {
+    const newId = this.getConversationId();
+    if (this.currentConversationId === newId) return;
+    console.log('ChatGPT Timeline: Conversation changed', { from: this.currentConversationId, to: newId });
+    this.currentConversationId = newId;
+
+    // 清空旧数据并重置处理器容器引用，触发重新初始化/解析
+    this.timelineData = [];
+    this.renderTimeline();
+
+    try {
+      // 清理并重新初始化 content handler 以绑定到新会话 DOM
+      this.contentHandler.conversationContainer = null;
+      this.contentHandler.scrollContainer = null;
+      const ok = await this.contentHandler.init();
+      if (ok) {
+        // 重新绑定观察器 到新容器
+        if (this.observer) {
+          try { this.observer.disconnect(); } catch {}
+          const target = this.contentHandler.conversationContainer || document.body;
+          this.observer.observe(target, { childList: true, subtree: true, attributes: false, characterData: false });
+        }
+        this.tryParseMessages();
+      }
+    } catch (error) {
+      console.error('ChatGPT Timeline: Error handling conversation change', error);
+    }
   }
 
   // 初始化平台专用内容处理器
